@@ -12,10 +12,11 @@ dotenv.config();
 
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
+
 app.use(
   cors({
-    origin: "http://localhost:5173", // Replace with your frontend URL
-    credentials: true, // Allow cookies to be sent
+    origin: ["http://localhost:5173", "https://your-app.vercel.app"],
+    credentials: true,
   }),
 );
 

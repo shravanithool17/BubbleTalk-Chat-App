@@ -11,9 +11,16 @@ export const getUsersForSidebar = async (req, res) => {
             $or: [{ senderId: loggedUserId }, { receiverId: loggedUserId }]
         }).sort({ createdAt: -1 });
 
-        const chatUserIds = [...new Set(messages.map(m =>
-            m.senderId.toString() === loggedUserId.toString() ? m.receiverId.toString() : m.senderId.toString()
-        ))];
+        const chatUserIds = [...new Set(messages.map(m => {
+            if (!m.senderId) return null;
+            const senderStr = m.senderId.toString();
+            const receiverStr = m.receiverId ? m.receiverId.toString() : null;
+
+            if (senderStr === loggedUserId.toString()) {
+                return receiverStr;
+            }
+            return senderStr;
+        }).filter(Boolean))];
 
         const users = await User.find({ _id: { $in: chatUserIds } }).select("-password");
 

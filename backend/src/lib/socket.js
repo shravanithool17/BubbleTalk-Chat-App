@@ -8,8 +8,10 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: true,
+    methods: ["GET", "POST"],
     credentials: true,
   },
+  transports: ["websocket", "polling"],
 });
 
 const userSocketMap = {}; // {userId: socketId}
@@ -22,8 +24,11 @@ io.on("connection", (socket) => {
   console.log("A user connected: " + socket.id);
 
   const userId = socket.handshake.query.userId;
-  if (userId) userSocketMap[userId] = socket.id;
+  if (userId) {
+    userSocketMap[userId] = socket.id;
+  }
 
+  // Broadcast online users to all clients
   io.emit("getOnlineUsers", Object.keys(userSocketMap));
 
   socket.on("typing", ({ receiverId }) => {
@@ -42,7 +47,9 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     console.log("A user disconnected: " + socket.id);
-    delete userSocketMap[userId];
+    if (userId) {
+      delete userSocketMap[userId];
+    }
     io.emit("getOnlineUsers", Object.keys(userSocketMap));
   });
 });

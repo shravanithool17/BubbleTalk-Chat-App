@@ -4,9 +4,10 @@ import toast from "react-hot-toast";
 import { io } from "socket.io-client";
 import { useChatStore } from "./useChatStore";
 
-const BASE_URL = import.meta.env.MODE === "development" 
-  ? "http://localhost:5001" 
-  : "https://bubbletalk-chat-app.up.railway.app";
+const BASE_URL = import.meta.env.VITE_BACKEND_URL 
+  || (import.meta.env.MODE === "development" 
+    ? "http://localhost:5001" 
+    : "https://bubbletalk-chat-app.up.railway.app");
 
 export const useAuthStore = create((set, get) => ({
   authUser: null,
@@ -52,7 +53,7 @@ export const useAuthStore = create((set, get) => ({
       toast.success("Logged in successfully");
       get().connectSocket();
     } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error(error.response?.data?.message || "Login failed");
     } finally {
       set({ isLoggingIn: false });
     }
@@ -66,7 +67,7 @@ export const useAuthStore = create((set, get) => ({
       toast.success("Logged out successfully");
       get().disconnectSocket();
     } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error(error.response?.data?.message || "Logout failed");
     }
   },
 
@@ -86,22 +87,26 @@ export const useAuthStore = create((set, get) => ({
 
   connectSocket: () => {
     const { authUser } = get();
-    if (!authUser || get().socket?.connected) {
-      return;
-    }
+    if (!authUser) return;
+
+    if (get().socket?.connected) return;
 
     const socket = io(BASE_URL, {
       query: {
         userId: authUser._id,
       },
+      transports: ["websocket", "polling"],
+      secure: true,
+      reconnection: true,
     });
 
     socket.connect();
-    set({ socket });
 
     socket.on("getOnlineUsers", (userIds) => {
       set({ onlineUsers: userIds });
     });
+
+    set({ socket });
 
     // Automatically subscribe to real-time messages & notifications
     useChatStore.getState().subscribeToMessages();
@@ -111,5 +116,6 @@ export const useAuthStore = create((set, get) => ({
     if (get().socket?.connected) {
       get().socket.disconnect();
     }
+    set({ socket: null, onlineUsers: [] });
   },
 }));

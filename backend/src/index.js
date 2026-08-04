@@ -16,10 +16,7 @@ app.use(cookieParser());
 
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://bubble-talk-chat-app-six.vercel.app",
-    ],
+    origin: true,
     credentials: true,
   }),
 );

@@ -1,4 +1,4 @@
-import { X, Users } from "lucide-react";
+import { X } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 
@@ -52,7 +52,9 @@ const ChatHeader = () => {
   }
 
   // Render Direct Contact 1-on-1 Chat Header
-  const isOnline = onlineUsers.includes(selectedUser?._id);
+  const isOnline = selectedUser?._id
+    ? onlineUsers.some((id) => String(id) === String(selectedUser._id))
+    : false;
   const isTyping = typingUsers[selectedUser?._id];
 
   return (

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Users, Search, X, Plus, UserCheck } from "lucide-react";
+import { Users, Search, X, Plus } from "lucide-react";
 
 import { useChatStore } from "../store/useChatStore";
 import { useAuthStore } from "../store/useAuthStore";
@@ -35,6 +35,12 @@ const Sidebar = () => {
     getGroups();
   }, [getUsers, getGroups]);
 
+  const isUserOnline = (userId) => {
+    if (!userId) return false;
+    const idStr = String(userId);
+    return onlineUsers.some((onlineId) => String(onlineId) === idStr);
+  };
+
   const handleSearchChange = (e) => {
     const query = e.target.value;
     setSearchQuery(query);
@@ -54,7 +60,7 @@ const Sidebar = () => {
   const displayUsersList = isSearchingActive ? searchResults : users;
 
   const filteredUsers = showOnlineOnly
-    ? displayUsersList.filter((user) => onlineUsers.includes(user._id))
+    ? displayUsersList.filter((user) => isUserOnline(user._id))
     : displayUsersList;
 
   if (isUsersLoading) return <SidebarSkeleton />;
@@ -193,6 +199,7 @@ const Sidebar = () => {
               filteredUsers.map((user) => {
                 const unread = unreadCounts[user._id] || 0;
                 const isSelected = selectedUser?._id === user._id;
+                const userOnline = isUserOnline(user._id);
 
                 return (
                   <button
@@ -211,8 +218,8 @@ const Sidebar = () => {
                         className="size-12 object-cover rounded-full"
                       />
 
-                      {/* Online Indicator */}
-                      {onlineUsers.includes(user._id) && (
+                      {/* Online Indicator Badge */}
+                      {userOnline && (
                         <span
                           className="absolute bottom-0 right-0 size-3 bg-green-500
                           rounded-full ring-2 ring-base-100"
@@ -238,7 +245,11 @@ const Sidebar = () => {
                         )}
                       </div>
                       <div className="text-xs text-zinc-400">
-                        {onlineUsers.includes(user._id) ? "Online" : "Offline"}
+                        {userOnline ? (
+                          <span className="text-green-500 font-medium">Online</span>
+                        ) : (
+                          "Offline"
+                        )}
                       </div>
                     </div>
                   </button>

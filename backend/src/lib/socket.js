@@ -14,22 +14,37 @@ const io = new Server(server, {
   transports: ["websocket", "polling"],
 });
 
-const userSocketMap = {}; // {userId: socketId}
+const userSocketMap = {}; // { userId: Set of socketIds }
 
 export function getReceiverSocketId(userId) {
-  return userSocketMap[userId];
+  const sockets = userSocketMap[userId];
+  if (sockets && sockets.size > 0) {
+    return Array.from(sockets)[0];
+  }
+  return null;
+}
+
+export function getAllReceiverSocketIds(userId) {
+  const sockets = userSocketMap[userId];
+  return sockets ? Array.from(sockets) : [];
 }
 
 io.on("connection", (socket) => {
   console.log("A user connected: " + socket.id);
 
   const userId = socket.handshake.query.userId;
-  if (userId) {
-    userSocketMap[userId] = socket.id;
+  if (userId && userId !== "undefined") {
+    if (!userSocketMap[userId]) {
+      userSocketMap[userId] = new Set();
+    }
+    userSocketMap[userId].add(socket.id);
   }
 
-  // Broadcast online users to all clients
-  io.emit("getOnlineUsers", Object.keys(userSocketMap));
+  // Broadcast online user IDs
+  const activeOnlineUserIds = Object.keys(userSocketMap).filter(
+    (id) => userSocketMap[id].size > 0
+  );
+  io.emit("getOnlineUsers", activeOnlineUserIds);
 
   socket.on("typing", ({ receiverId }) => {
     const receiverSocketId = getReceiverSocketId(receiverId);
@@ -47,10 +62,16 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     console.log("A user disconnected: " + socket.id);
-    if (userId) {
-      delete userSocketMap[userId];
+    if (userId && userSocketMap[userId]) {
+      userSocketMap[userId].delete(socket.id);
+      if (userSocketMap[userId].size === 0) {
+        delete userSocketMap[userId];
+      }
     }
-    io.emit("getOnlineUsers", Object.keys(userSocketMap));
+    const currentOnlineUserIds = Object.keys(userSocketMap).filter(
+      (id) => userSocketMap[id].size > 0
+    );
+    io.emit("getOnlineUsers", currentOnlineUserIds);
   });
 });
 

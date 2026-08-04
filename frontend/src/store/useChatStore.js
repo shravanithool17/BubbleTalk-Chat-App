@@ -260,8 +260,8 @@ export const useChatStore = create((set, get) => ({
     });
 
     // Listening for new group messages
-    socket.on("newGroupMessage", (newGroupMsg) => {
-      const { selectedGroup, groups, unreadCounts } = get();
+    socket.on("newGroupMessage", async (newGroupMsg) => {
+      const { selectedGroup, groups, getGroups } = get();
 
       playNotificationSound();
 
@@ -269,10 +269,14 @@ export const useChatStore = create((set, get) => ({
         set({ messages: [...get().messages, newGroupMsg] });
       } else {
         const groupId = newGroupMsg.groupId;
-        const currentGroup = groups.find((g) => g._id === groupId);
-        const groupName = currentGroup ? currentGroup.name : "Group";
-        const senderName = newGroupMsg.senderId?.fullName || "Someone";
-        const messagePreview = newGroupMsg.text || (newGroupMsg.image ? "📷 Image" : "New message");
+        let currentGroup = groups.find((g) => g._id === groupId);
+        if (!currentGroup) {
+          await getGroups();
+          currentGroup = get().groups.find((g) => g._id === groupId);
+        }
+        const groupName = currentGroup ? currentGroup.name : "Group Chat";
+        const senderName = newGroupMsg.senderId?.fullName || "Member";
+        const messagePreview = newGroupMsg.text || (newGroupMsg.image ? "📷 Image" : (newGroupMsg.audio ? "🎤 Voice note" : "New message"));
 
         triggerDesktopNotification(`👨‍👩‍👧‍👦 ${groupName}: ${senderName}`, messagePreview, currentGroup?.groupPic || "/avatar.png");
 
@@ -314,19 +318,25 @@ export const useChatStore = create((set, get) => ({
 
         set({
           unreadCounts: {
-            ...unreadCounts,
-            [groupId]: (unreadCounts[groupId] || 0) + 1,
+            ...get().unreadCounts,
+            [groupId]: (get().unreadCounts[groupId] || 0) + 1,
           },
         });
       }
     });
 
     // Listening for direct 1-on-1 messages
-    socket.on("newMessage", (newMessage) => {
-      const { selectedUser, users, unreadCounts, setSelectedUser } = get();
+    socket.on("newMessage", async (newMessage) => {
+      const { selectedUser, users, setSelectedUser, getUsers } = get();
 
       const senderId = newMessage.senderId;
-      const senderUser = users.find((u) => u._id === senderId);
+      let senderUser = users.find((u) => u._id === senderId);
+
+      if (!senderUser) {
+        await getUsers();
+        senderUser = get().users.find((u) => u._id === senderId);
+      }
+
       const senderName = senderUser ? senderUser.fullName : "Someone";
       const messagePreview = newMessage.text || (newMessage.image ? "📷 Sent an image" : (newMessage.audio ? "🎤 Sent a voice note" : "New message"));
 
@@ -335,7 +345,7 @@ export const useChatStore = create((set, get) => ({
       if (selectedUser && (newMessage.senderId === selectedUser._id || newMessage.receiverId === selectedUser._id)) {
         set({ messages: [...get().messages, newMessage] });
       } else {
-        const currentUnread = unreadCounts[senderId] || 0;
+        const currentUnread = get().unreadCounts[senderId] || 0;
 
         triggerDesktopNotification(`${senderName} messaged you`, messagePreview, senderUser?.profilePic || "/avatar.png");
 
@@ -377,14 +387,15 @@ export const useChatStore = create((set, get) => ({
 
         set({
           unreadCounts: {
-            ...unreadCounts,
+            ...get().unreadCounts,
             [senderId]: currentUnread + 1,
           },
         });
       }
 
       if (senderUser) {
-        const remainingUsers = users.filter((u) => u._id !== senderId);
+        const currentUsers = get().users;
+        const remainingUsers = currentUsers.filter((u) => u._id !== senderId);
         set({ users: [senderUser, ...remainingUsers] });
       }
     });
@@ -418,7 +429,7 @@ export const useChatStore = create((set, get) => ({
 
     set({
       selectedUser,
-      selectedGroup: null, // Clear active group
+      selectedGroup: null,
       users: updatedUsers,
       unreadCounts: updatedUnreads,
       searchResults: [],
@@ -436,7 +447,7 @@ export const useChatStore = create((set, get) => ({
 
     set({
       selectedGroup,
-      selectedUser: null, // Clear active 1-on-1 contact
+      selectedUser: null,
       unreadCounts: updatedUnreads,
     });
 

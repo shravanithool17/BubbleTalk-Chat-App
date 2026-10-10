@@ -1,12 +1,14 @@
+
 import { create } from "zustand";
 import { axiosInstance } from "../lib/axios";
 import toast from "react-hot-toast";
 import { io } from "socket.io-client";
 import { useChatStore } from "./useChatStore";
 
-const BASE_URL = import.meta.env.VITE_BACKEND_URL 
-  || (import.meta.env.MODE === "development" 
-    ? "http://localhost:5001" 
+const BASE_URL =
+  import.meta.env.VITE_BACKEND_URL ||
+  (import.meta.env.MODE === "development"
+    ? "http://localhost:5001"
     : "https://bubbletalk-chat-app.onrender.com");
 
 export const useAuthStore = create((set, get) => ({
@@ -88,34 +90,24 @@ export const useAuthStore = create((set, get) => ({
   connectSocket: () => {
     const { authUser } = get();
     if (!authUser) return;
-
     if (get().socket?.connected) return;
 
     const socket = io(BASE_URL, {
-      query: {
-        userId: authUser._id,
-      },
+      query: { userId: authUser._id },
       transports: ["websocket", "polling"],
-      secure: true,
       reconnection: true,
     });
-
-    socket.connect();
 
     socket.on("getOnlineUsers", (userIds) => {
       set({ onlineUsers: userIds });
     });
 
     set({ socket });
-
-    // Automatically subscribe to real-time messages & notifications
     useChatStore.getState().subscribeToMessages();
   },
 
   disconnectSocket: () => {
-    if (get().socket?.connected) {
-      get().socket.disconnect();
-    }
+    get().socket?.disconnect();
     set({ socket: null, onlineUsers: [] });
   },
 }));

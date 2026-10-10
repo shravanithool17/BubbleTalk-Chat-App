@@ -9,7 +9,6 @@ export const axiosInstance = axios.create({
   withCredentials: true,
 });
 
-// Attach the authentication token to requests when available
 axiosInstance.interceptors.request.use((config) => {
   const token = localStorage.getItem("chat-token");
 

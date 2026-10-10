@@ -7,7 +7,7 @@ import { useChatStore } from "./useChatStore";
 const BASE_URL = import.meta.env.VITE_BACKEND_URL 
   || (import.meta.env.MODE === "development" 
     ? "http://localhost:5001" 
-    : "https://bubbletalk-chat-app.up.railway.app");
+    : "https://bubbletalk-chat-app.onrender.com"));
 
 export const useAuthStore = create((set, get) => ({
   authUser: null,

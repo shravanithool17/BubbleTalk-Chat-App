@@ -1,4 +1,3 @@
-
 import express from "express";
 import dotenv from "dotenv";
 import connectDB from "./lib/db.js";
@@ -11,18 +10,25 @@ import { app, server } from "./lib/socket.js";
 
 dotenv.config();
 
+// Allowed frontend origins (no trailing slashes).
+// Set CLIENT_URL on Render, e.g. https://bubble-talk-chat-app-pjda.vercel.app
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://bubble-talk-chat-app-pjda.vercel.app",
+  process.env.CLIENT_URL,
+].filter(Boolean);
+
 // Middleware
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://bubble-talk-chat-app-six.vercel.app",
-    ],
+    origin: allowedOrigins,
     credentials: true,
-  })
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
 );
 
 // API routes

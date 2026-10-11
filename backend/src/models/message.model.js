@@ -46,9 +46,24 @@ const MessageSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    replyTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Message",
+      default: null,
+    },
+    replyDetails: {
+      text: { type: String, default: "" },
+      senderName: { type: String, default: "" },
+      image: { type: String, default: "" },
+      audio: { type: String, default: "" },
+    },
   },
   { timestamps: true }
 );
+
+MessageSchema.index({ senderId: 1, receiverId: 1 });
+MessageSchema.index({ groupId: 1, createdAt: 1 });
+MessageSchema.index({ createdAt: 1 });
 
 const Message = mongoose.model("Message", MessageSchema);
 

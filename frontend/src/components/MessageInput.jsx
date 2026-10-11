@@ -1,8 +1,35 @@
 import { useRef, useState, useEffect } from "react";
 import { useChatStore } from "../store/useChatStore";
-import { Image, Send, X, Mic, Square, Trash2 } from "lucide-react";
+import { Image, Send, X, Mic, Square, Trash2, Reply } from "lucide-react";
 import toast from "react-hot-toast";
 import MediaPicker from "./MediaPicker";
+
+const compressImage = (file, maxWidth = 1200, quality = 0.82) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new window.Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = reject;
+      img.src = event.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
 
 const MessageInput = () => {
   const [text, setText] = useState("");
@@ -16,8 +43,16 @@ const MessageInput = () => {
   const audioChunksRef = useRef([]);
   const recordingTimerRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const isTypingEmittedRef = useRef(false);
 
-  const { sendMessage, sendTypingStatus, selectedUser } = useChatStore();
+  const { sendMessage, sendTypingStatus, selectedUser, replyingTo, clearReplyingTo } =
+    useChatStore();
+
+  useEffect(() => {
+    if (replyingTo && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [replyingTo]);
 
   useEffect(() => {
     return () => {
@@ -31,27 +66,35 @@ const MessageInput = () => {
     setText(value);
 
     if (selectedUser?._id) {
-      sendTypingStatus(selectedUser._id, true);
+      if (!isTypingEmittedRef.current) {
+        sendTypingStatus(selectedUser._id, true);
+        isTypingEmittedRef.current = true;
+      }
 
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = setTimeout(() => {
         sendTypingStatus(selectedUser._id, false);
+        isTypingEmittedRef.current = false;
       }, 1500);
     }
   };
 
-  const handleImageChange = (e) => {
+  const handleImageChange = async (e) => {
     const file = e.target.files[0];
     if (!file || !file.type.startsWith("image/")) {
       toast.error("Please select an image file");
       return;
     }
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagePreview(reader.result);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImage(file);
+      setImagePreview(compressed);
+    } catch (err) {
+      console.error("Image compression error:", err);
+      const reader = new FileReader();
+      reader.onloadend = () => setImagePreview(reader.result);
+      reader.readAsDataURL(file);
+    }
   };
 
   const removeImage = () => {
@@ -152,6 +195,7 @@ const MessageInput = () => {
 
     if (selectedUser?._id) {
       sendTypingStatus(selectedUser._id, false);
+      isTypingEmittedRef.current = false;
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     }
 
@@ -171,6 +215,35 @@ const MessageInput = () => {
 
   return (
     <div className="p-4 w-full">
+      {/* Replying To Banner */}
+      {replyingTo && (
+        <div className="mb-2 bg-base-200/90 border border-base-300 border-l-4 border-l-primary rounded-xl p-2.5 flex items-center justify-between gap-3 shadow-md backdrop-blur-sm animate-enter">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+              <Reply size={13} className="shrink-0" />
+              <span className="truncate">Replying to {replyingTo.senderName || "Message"}</span>
+            </div>
+            <p className="text-xs text-base-content/70 truncate mt-0.5">
+              {replyingTo.text || (replyingTo.image ? "📷 Photo" : (replyingTo.audio ? "🎤 Voice note" : "Attachment"))}
+            </p>
+          </div>
+          {replyingTo.image && (
+            <img
+              src={replyingTo.image}
+              alt="Reply preview"
+              className="size-10 rounded-lg object-cover border border-base-300 shrink-0"
+            />
+          )}
+          <button
+            type="button"
+            onClick={clearReplyingTo}
+            className="btn btn-circle btn-ghost btn-xs text-zinc-400 hover:text-zinc-200"
+            title="Cancel reply"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
       {imagePreview && (
         <div className="mb-3 flex items-center gap-2">
           <div className="relative">

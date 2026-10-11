@@ -76,6 +76,11 @@ export const getGroupMessages = async (req, res) => {
 
     const messages = await Message.find({ groupId })
       .populate("senderId", "fullName profilePic")
+      .populate({
+        path: "replyTo",
+        select: "text image audio senderId createdAt",
+        populate: { path: "senderId", select: "fullName profilePic" }
+      })
       .sort({ createdAt: 1 });
 
     res.status(200).json(messages);
@@ -88,7 +93,7 @@ export const getGroupMessages = async (req, res) => {
 export const sendGroupMessage = async (req, res) => {
   try {
     const { groupId } = req.params;
-    const { text, image, audio } = req.body;
+    const { text, image, audio, replyTo, replyDetails } = req.body;
     const senderId = req.user._id;
 
     const group = await Group.findById(groupId);
@@ -122,14 +127,19 @@ export const sendGroupMessage = async (req, res) => {
       text: text || "",
       image: imageUrl,
       audio: audioUrl,
+      replyTo: replyTo || null,
+      replyDetails: replyDetails || null,
     });
 
     await newMessage.save();
 
-    const populatedMessage = await Message.findById(newMessage._id).populate(
-      "senderId",
-      "fullName profilePic"
-    );
+    const populatedMessage = await Message.findById(newMessage._id)
+      .populate("senderId", "fullName profilePic")
+      .populate({
+        path: "replyTo",
+        select: "text image audio senderId createdAt",
+        populate: { path: "senderId", select: "fullName profilePic" }
+      });
 
     // Update group updatedAt timestamp
     group.updatedAt = new Date();

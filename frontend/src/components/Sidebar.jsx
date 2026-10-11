@@ -41,14 +41,19 @@ const Sidebar = () => {
     return onlineUsers.some((onlineId) => String(onlineId) === idStr);
   };
 
-  const handleSearchChange = (e) => {
-    const query = e.target.value;
-    setSearchQuery(query);
-    if (query.trim()) {
-      searchUsers(query);
-    } else {
+  useEffect(() => {
+    if (!searchQuery.trim()) {
       clearSearch();
+      return;
     }
+    const timer = setTimeout(() => {
+      searchUsers(searchQuery);
+    }, 280);
+    return () => clearTimeout(timer);
+  }, [searchQuery, searchUsers, clearSearch]);
+
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
   };
 
   const clearSearchInput = () => {

@@ -4,20 +4,26 @@ import toast from "react-hot-toast";
 import { axiosInstance } from "../lib/axios";
 import { useAuthStore } from "./useAuthStore";
 
+let audioCtxInstance = null;
 const playNotificationSound = () => {
   try {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
+    if (!audioCtxInstance) {
+      audioCtxInstance = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtxInstance.state === "suspended") {
+      audioCtxInstance.resume();
+    }
+    const osc = audioCtxInstance.createOscillator();
+    const gain = audioCtxInstance.createGain();
     osc.type = "sine";
-    osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.12);
-    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+    osc.frequency.setValueAtTime(587.33, audioCtxInstance.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880, audioCtxInstance.currentTime + 0.12);
+    gain.gain.setValueAtTime(0.15, audioCtxInstance.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtxInstance.currentTime + 0.22);
     osc.connect(gain);
-    gain.connect(audioCtx.destination);
+    gain.connect(audioCtxInstance.destination);
     osc.start();
-    osc.stop(audioCtx.currentTime + 0.25);
+    osc.stop(audioCtxInstance.currentTime + 0.22);
   } catch (e) {
     // Audio Context playback fallback
   }
@@ -40,6 +46,7 @@ export const useChatStore = create((set, get) => ({
   searchResults: [],
   selectedUser: null,
   selectedGroup: null,
+  replyingTo: null,
   isUsersLoading: false,
   isGroupsLoading: false,
   isMessagesLoading: false,
@@ -47,6 +54,9 @@ export const useChatStore = create((set, get) => ({
   isCreatingGroup: false,
   unreadCounts: {},
   typingUsers: {},
+
+  setReplyingTo: (replyingTo) => set({ replyingTo }),
+  clearReplyingTo: () => set({ replyingTo: null }),
 
   getUsers: async () => {
     set({ isUsersLoading: true });
@@ -130,12 +140,23 @@ export const useChatStore = create((set, get) => ({
   },
 
   sendMessage: async (messageData) => {
-    const { selectedUser, selectedGroup, messages, users } = get();
+    const { selectedUser, selectedGroup, messages, users, replyingTo } = get();
+
+    const payload = {
+      ...messageData,
+      replyTo: messageData.replyTo || replyingTo?._id || null,
+      replyDetails: messageData.replyDetails || (replyingTo ? {
+        text: replyingTo.text || "",
+        senderName: replyingTo.senderName || "",
+        image: replyingTo.image || "",
+        audio: replyingTo.audio || "",
+      } : null),
+    };
 
     if (selectedGroup) {
       try {
-        const res = await axiosInstance.post(`/groups/${selectedGroup._id}/send`, messageData);
-        set({ messages: [...messages, res.data] });
+        const res = await axiosInstance.post(`/groups/${selectedGroup._id}/send`, payload);
+        set({ messages: [...messages, res.data], replyingTo: null });
       } catch (error) {
         toast.error(error.response?.data?.message || "Failed to send group message");
       }
@@ -144,8 +165,8 @@ export const useChatStore = create((set, get) => ({
 
     if (selectedUser) {
       try {
-        const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, messageData);
-        set({ messages: [...messages, res.data] });
+        const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, payload);
+        set({ messages: [...messages, res.data], replyingTo: null });
 
         const filteredUsers = users.filter((u) => u._id !== selectedUser._id);
         set({ users: [selectedUser, ...filteredUsers] });
@@ -417,7 +438,7 @@ export const useChatStore = create((set, get) => ({
 
   setSelectedUser: (selectedUser) => {
     if (!selectedUser) {
-      set({ selectedUser: null });
+      set({ selectedUser: null, replyingTo: null });
       return;
     }
 
@@ -430,6 +451,7 @@ export const useChatStore = create((set, get) => ({
     set({
       selectedUser,
       selectedGroup: null,
+      replyingTo: null,
       users: updatedUsers,
       unreadCounts: updatedUnreads,
       searchResults: [],
@@ -438,7 +460,7 @@ export const useChatStore = create((set, get) => ({
 
   setSelectedGroup: (selectedGroup) => {
     if (!selectedGroup) {
-      set({ selectedGroup: null });
+      set({ selectedGroup: null, replyingTo: null });
       return;
     }
 
@@ -448,6 +470,7 @@ export const useChatStore = create((set, get) => ({
     set({
       selectedGroup,
       selectedUser: null,
+      replyingTo: null,
       unreadCounts: updatedUnreads,
     });
 

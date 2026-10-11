@@ -47,17 +47,17 @@ io.on("connection", (socket) => {
   io.emit("getOnlineUsers", activeOnlineUserIds);
 
   socket.on("typing", ({ receiverId }) => {
-    const receiverSocketId = getReceiverSocketId(receiverId);
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("userTyping", { senderId: userId });
-    }
+    const socketIds = getAllReceiverSocketIds(receiverId);
+    socketIds.forEach((sockId) => {
+      io.to(sockId).emit("userTyping", { senderId: userId });
+    });
   });
 
   socket.on("stopTyping", ({ receiverId }) => {
-    const receiverSocketId = getReceiverSocketId(receiverId);
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("userStopTyping", { senderId: userId });
-    }
+    const socketIds = getAllReceiverSocketIds(receiverId);
+    socketIds.forEach((sockId) => {
+      io.to(sockId).emit("userStopTyping", { senderId: userId });
+    });
   });
 
   socket.on("disconnect", () => {

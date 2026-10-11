@@ -1,7 +1,7 @@
 import User from "../models/user.model.js";
 import Message from "../models/message.model.js";
 import cloudinary from "../lib/cloudinary.js";
-import { getReceiverSocketId, io } from "../lib/socket.js";
+import { getReceiverSocketId, getAllReceiverSocketIds, io } from "../lib/socket.js";
 
 export const getUsersForSidebar = async (req, res) => {
     try {
@@ -9,7 +9,10 @@ export const getUsersForSidebar = async (req, res) => {
 
         const messages = await Message.find({
             $or: [{ senderId: loggedUserId }, { receiverId: loggedUserId }]
-        }).sort({ createdAt: -1 });
+        })
+        .select("senderId receiverId createdAt")
+        .sort({ createdAt: -1 })
+        .limit(300);
 
         const chatUserIds = [...new Set(messages.map(m => {
             if (!m.senderId) return null;
@@ -67,7 +70,13 @@ export const getMessagesByUserId = async (req, res) => {
                 { senderId: loggedUserId, receiverId: req.params.id },
                 { senderId: req.params.id, receiverId: loggedUserId }
             ]
-        }).sort({ createdAt: 1 });
+        })
+        .populate({
+            path: "replyTo",
+            select: "text image audio senderId createdAt",
+            populate: { path: "senderId", select: "fullName profilePic" }
+        })
+        .sort({ createdAt: 1 });
         res.status(200).json(messages);
     } catch (error) {
         console.log("Error in getMessagesByUserId controller, error.message:", error.message);
@@ -77,7 +86,7 @@ export const getMessagesByUserId = async (req, res) => {
 
 export const sendMessage = async (req, res) => {
     try {
-        const { text, image, audio } = req.body;
+        const { text, image, audio, replyTo, replyDetails } = req.body;
         const loggedUserId = req.user._id;
         const receiverId = req.params.id;
 
@@ -103,15 +112,23 @@ export const sendMessage = async (req, res) => {
             text: text || "",
             image: imageUrl,
             audio: audioUrl,
+            replyTo: replyTo || null,
+            replyDetails: replyDetails || null,
         });
 
         await newMessage.save();
 
-        const receiverSocketId = getReceiverSocketId(receiverId);
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit("newMessage", newMessage);
-        }
-        res.status(201).json(newMessage);
+        const populatedMessage = await Message.findById(newMessage._id).populate({
+            path: "replyTo",
+            select: "text image audio senderId createdAt",
+            populate: { path: "senderId", select: "fullName profilePic" }
+        });
+
+        const receiverSockets = getAllReceiverSocketIds(receiverId);
+        receiverSockets.forEach((sockId) => {
+            io.to(sockId).emit("newMessage", populatedMessage);
+        });
+        res.status(201).json(populatedMessage);
     } catch (error) {
         console.log("Error in sendMessage controller, error.message:", error.message);
         return res.status(500).json({ message: "Internal server error" });
@@ -136,9 +153,10 @@ export const reactToMessage = async (req, res) => {
         await message.save();
 
         const receiverId = message.senderId.toString() === userId.toString() ? message.receiverId : message.senderId;
-        const receiverSocketId = getReceiverSocketId(receiverId);
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit("messageReaction", message);
+        if (receiverId) {
+            getAllReceiverSocketIds(receiverId).forEach((sockId) => {
+                io.to(sockId).emit("messageReaction", message);
+            });
         }
 
         res.status(200).json(message);
@@ -162,9 +180,10 @@ export const deleteMessage = async (req, res) => {
 
         await Message.findByIdAndDelete(messageId);
 
-        const receiverSocketId = getReceiverSocketId(message.receiverId);
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit("messageDeleted", messageId);
+        if (message.receiverId) {
+            getAllReceiverSocketIds(message.receiverId).forEach((sockId) => {
+                io.to(sockId).emit("messageDeleted", messageId);
+            });
         }
 
         res.status(200).json({ messageId, message: "Message deleted" });
@@ -191,9 +210,10 @@ export const editMessage = async (req, res) => {
         message.isEdited = true;
         await message.save();
 
-        const receiverSocketId = getReceiverSocketId(message.receiverId);
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit("messageEdited", message);
+        if (message.receiverId) {
+            getAllReceiverSocketIds(message.receiverId).forEach((sockId) => {
+                io.to(sockId).emit("messageEdited", message);
+            });
         }
 
         res.status(200).json(message);
